@@ -1,8 +1,11 @@
-import { createClient } from './supabase/server'
-import { Todo } from './supabase/types'
+'use client'
+
+import { createClient } from '@/lib/supabase/client'
+import { Todo } from '@/lib/supabase/types'
+
+const supabase = createClient()
 
 export async function getTodos(): Promise<Todo[]> {
-  const supabase = await createClient()
   const { data, error } = await supabase
     .from('todos')
     .select('*')
@@ -17,7 +20,6 @@ export async function getTodos(): Promise<Todo[]> {
 }
 
 export async function addTodo(title: string): Promise<Todo | null> {
-  const supabase = await createClient()
   const { data, error } = await supabase
     .from('todos')
     .insert([{ title, completed: false }])
@@ -33,7 +35,6 @@ export async function addTodo(title: string): Promise<Todo | null> {
 }
 
 export async function updateTodo(id: string, updates: Partial<Todo>): Promise<Todo | null> {
-  const supabase = await createClient()
   const { data, error } = await supabase
     .from('todos')
     .update(updates)
@@ -50,7 +51,6 @@ export async function updateTodo(id: string, updates: Partial<Todo>): Promise<To
 }
 
 export async function deleteTodo(id: string): Promise<boolean> {
-  const supabase = await createClient()
   const { error } = await supabase
     .from('todos')
     .delete()
