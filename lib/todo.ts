@@ -19,10 +19,10 @@ export async function getTodos(): Promise<Todo[]> {
   return data || []
 }
 
-export async function addTodo(title: string): Promise<Todo | null> {
+export async function addTodo(title: string, category: string = '默认'): Promise<Todo | null> {
   const { data, error } = await supabase
     .from('todos')
-    .insert([{ title, completed: false }])
+    .insert([{ title, completed: false, category }])
     .select()
     .single()
 
