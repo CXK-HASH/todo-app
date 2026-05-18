@@ -18,6 +18,7 @@ export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [newTitle, setNewTitle] = useState('')
   const [newCategory, setNewCategory] = useState('工作')
+  const [filterCategory, setFilterCategory] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -62,6 +63,14 @@ export default function Home() {
     return CATEGORY_COLORS[category] || { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' }
   }
 
+  const filteredTodos = filterCategory
+    ? todos.filter((todo) => todo.category === filterCategory)
+    : todos
+
+  const toggleFilter = (category: string) => {
+    setFilterCategory(filterCategory === category ? null : category)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4">
       <div className="max-w-2xl mx-auto">
@@ -104,12 +113,42 @@ export default function Home() {
           </div>
         </form>
 
+        {/* 分类筛选按钮 */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <button
+            onClick={() => setFilterCategory(null)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              filterCategory === null
+                ? 'bg-gray-800 text-white'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            全部
+          </button>
+          {CATEGORIES.map((cat) => {
+            const color = getColor(cat)
+            return (
+              <button
+                key={cat}
+                onClick={() => toggleFilter(cat)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  filterCategory === cat
+                    ? `${color.bg} ${color.text} ring-2 ring-offset-1 ring-${cat === '工作' ? 'blue' : cat === '学习' ? 'green' : 'orange'}-500`
+                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                }`}
+              >
+                {cat}
+              </button>
+            )
+          })}
+        </div>
+
         {/* 任务列表 */}
         <div className="bg-white rounded-xl shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-semibold text-gray-800">我的任务</h2>
             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-              {todos.length} 个任务
+              {filterCategory ? `${filterCategory}: ${filteredTodos.length}` : `${todos.length} 个任务`}
             </span>
           </div>
           
@@ -118,15 +157,15 @@ export default function Home() {
               <div className="animate-spin h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
               <p className="text-gray-500">加载中...</p>
             </div>
-          ) : todos.length === 0 ? (
+          ) : filteredTodos.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">📝</div>
-              <p className="text-gray-500 text-lg">还没有待办事项</p>
-              <p className="text-gray-400 text-sm mt-2">添加你的第一个任务吧！</p>
+              <div className="text-gray-400 text-6xl mb-4">🔍</div>
+              <p className="text-gray-500 text-lg">{filterCategory ? `没有「${filterCategory}」类的任务` : '还没有待办事项'}</p>
+              <p className="text-gray-400 text-sm mt-2">{filterCategory ? '换个分类看看吧' : '添加你的第一个任务吧！'}</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {todos.map((todo) => {
+              {filteredTodos.map((todo) => {
                 const color = getColor(todo.category)
                 return (
                 <div key={todo.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
