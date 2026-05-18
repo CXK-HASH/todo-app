@@ -4,9 +4,20 @@ import { useState, useEffect } from 'react'
 import { getTodos, updateTodo, deleteTodo, addTodo } from '@/lib/todo'
 import { Todo } from '@/lib/supabase/types'
 
+const CATEGORIES = ['工作', '学习', '生活'] as const
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  '工作': { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
+  '学习': { bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500' },
+  '生活': { bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-500' },
+}
+
+const DEFAULT_CATEGORY = '默认'
+
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [newTitle, setNewTitle] = useState('')
+  const [newCategory, setNewCategory] = useState('工作')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -28,10 +39,11 @@ export default function Home() {
   const handleAdd = async () => {
     if (!newTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
-    const result = await addTodo(newTitle.trim())
+    const result = await addTodo(newTitle.trim(), newCategory)
     setIsSubmitting(false)
     if (result) {
       setNewTitle('')
+      setNewCategory('工作')
       loadTodos()
     }
   }
@@ -44,6 +56,10 @@ export default function Home() {
   const handleDelete = async (id: string) => {
     await deleteTodo(id)
     loadTodos()
+  }
+
+  const getColor = (category: string) => {
+    return CATEGORY_COLORS[category] || { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' }
   }
 
   return (
@@ -69,6 +85,15 @@ export default function Home() {
               className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
               disabled={isSubmitting}
             />
+            <select
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              className="px-3 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
             <button
               type="submit"
               disabled={!newTitle.trim() || isSubmitting}
@@ -101,27 +126,34 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-3">
-              {todos.map((todo) => (
+              {todos.map((todo) => {
+                const color = getColor(todo.category)
+                return (
                 <div key={todo.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
                     <input
                       type="checkbox"
                       checked={todo.completed}
                       onChange={(e) => handleToggle(todo.id, e.target.checked)}
-                      className="h-5 w-5 text-blue-600 rounded focus:ring-blue-500"
+                      className="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 shrink-0"
                     />
-                    <span className={`text-lg ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                      {todo.title}
-                    </span>
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} shrink-0`}>
+                        {todo.category}
+                      </span>
+                      <span className={`text-lg truncate ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                        {todo.title}
+                      </span>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleDelete(todo.id)}
-                    className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                    className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors shrink-0 ml-2"
                   >
                     删除
                   </button>
                 </div>
-              ))}
+                )})}
             </div>
           )}
         </div>
