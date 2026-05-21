@@ -30,6 +30,8 @@ export default function Home() {
   const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [aiCategoryName, setAiCategoryName] = useState<string | null>(null)
+  const [lastAiTitle, setLastAiTitle] = useState('')
 
   const loadData = useCallback(async () => {
     try {
@@ -61,8 +63,30 @@ export default function Home() {
   const handleAdd = async () => {
     if (!newTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
-    const cat = categories.find(c => c.id === selectedCategoryId)
-    const result = await addTodo(newTitle.trim(), selectedCategoryId, cat?.name || '默认')
+
+    // AI 自动分类（输入变化时重新分类）
+    if (newTitle.trim() !== lastAiTitle) {
+      try {
+        const res = await fetch('/api/classify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: newTitle.trim() }),
+        })
+        const data = await res.json()
+        if (data?.category) {
+          setAiCategoryName(data.category)
+          setLastAiTitle(newTitle.trim())
+          // 自动选中 AI 推荐的分类
+          const aiCat = categories.find(c => c.name === data.category)
+          if (aiCat) setSelectedCategoryId(aiCat.id)
+        }
+      } catch {
+        // AI 分类失败，保持用户选择
+      }
+    }
+
+    const cat = categories.find(c => c.id === categoryId)
+    const result = await addTodo(newTitle.trim(), categoryId, cat?.name || '默认')
     setIsSubmitting(false)
     if (result) {
       setNewTitle('')
@@ -109,7 +133,10 @@ export default function Home() {
           {/* ========== 左侧分类筛选栏 ========== */}
           <div className="w-48 shrink-0">
             <div className="bg-white rounded-xl shadow-lg p-4 sticky top-8">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">分类筛选</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center justify-between">
+                分类筛选
+                <span className="text-[10px] text-purple-400 font-normal normal-case">🤖 AI</span>
+              </h3>
               <div className="space-y-1">
                 {/* 全部 */}
                 <button
@@ -191,6 +218,17 @@ export default function Home() {
                   {isSubmitting ? '添加中...' : '添加'}
                 </button>
               </form>
+              {/* AI 分类提示 */}
+              {aiCategoryName && newTitle.trim() && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 font-medium">
+                    🤖 AI分类
+                  </span>
+                  <span>检测为：<strong>{aiCategoryName}</strong></span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-400">可下拉手动更改</span>
+                </div>
+              )}
             </div>
 
             {/* 任务列表 */}
