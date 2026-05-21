@@ -1,19 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getTodos, updateTodo, deleteTodo, addTodo, getCategories } from '@/lib/todo'
 import { Todo, Category } from '@/lib/supabase/types'
 
-// 本地默认的颜色映射（fallback）
-const LOCAL_CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
-  '工作': { bg: 'bg-blue-100', text: 'text-blue-700' },
-  '学习': { bg: 'bg-green-100', text: 'text-green-700' },
-  '生活': { bg: 'bg-orange-100', text: 'text-orange-700' },
-}
-
 const DEFAULT_COLOR = { bg: 'bg-gray-100', text: 'text-gray-600' }
 
-// 根据 hex 颜色映射到 Tailwind 颜色类名
 function hexToTailwind(hex: string | undefined): { bg: string; text: string } {
   if (!hex) return DEFAULT_COLOR
   const map: Record<string, { bg: string; text: string }> = {
@@ -34,12 +26,12 @@ export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [newTitle, setNewTitle] = useState('')
-  const [newCategoryId, setNewCategoryId] = useState<string | null>(null)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [todosData, categoriesData] = await Promise.all([
         getTodos(),
@@ -47,26 +39,30 @@ export default function Home() {
       ])
       setTodos(todosData)
       setCategories(categoriesData)
-      // 默认选中第一个分类
-      if (categoriesData.length > 0 && !newCategoryId) {
-        setNewCategoryId(categoriesData[0].id)
-      }
     } catch (err) {
-      console.error('Failed to load data:', err)
+      console.error('加载数据失败:', err)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [loadData])
+
+  useEffect(() => {
+    // 分类列表加载后，默认选中第一个非"默认"的分类
+    if (categories.length > 0 && !selectedCategoryId) {
+      const first = categories.find(c => c.name !== '默认') || categories[0]
+      setSelectedCategoryId(first.id)
+    }
+  }, [categories, selectedCategoryId])
 
   const handleAdd = async () => {
     if (!newTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
-    const selectedCategory = categories.find(c => c.id === newCategoryId)
-    const result = await addTodo(newTitle.trim(), newCategoryId, selectedCategory?.name || '默认')
+    const cat = categories.find(c => c.id === selectedCategoryId)
+    const result = await addTodo(newTitle.trim(), selectedCategoryId, cat?.name || '默认')
     setIsSubmitting(false)
     if (result) {
       setNewTitle('')
@@ -87,14 +83,13 @@ export default function Home() {
   const getColor = (categoryId: string | null) => {
     if (!categoryId) return DEFAULT_COLOR
     const cat = categories.find(c => c.id === categoryId)
-    if (!cat) return DEFAULT_COLOR
-    return hexToTailwind(cat.color)
+    return cat ? hexToTailwind(cat.color) : DEFAULT_COLOR
   }
 
-  const getCategoryName = (categoryId: string | null) => {
-    if (!categoryId) return '默认'
+  const getCategoryInfo = (categoryId: string | null) => {
+    if (!categoryId) return { name: '默认', icon: '📋' }
     const cat = categories.find(c => c.id === categoryId)
-    return cat?.name || '默认'
+    return cat ? { name: cat.name, icon: cat.icon } : { name: '默认', icon: '📋' }
   }
 
   const filteredTodos = filterCategoryId
@@ -102,141 +97,169 @@ export default function Home() {
     : todos
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* 标题区域 */}
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-800 mb-3">待办清单</h1>
-          <p className="text-gray-600">管理你的每日任务，保持高效</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* 标题 */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">待办清单</h1>
+          <p className="text-gray-500">管理你的每日任务，保持高效</p>
         </div>
 
-        {/* 添加任务表单 */}
-        <form 
-          onSubmit={(e) => { e.preventDefault(); handleAdd() }} 
-          className="mb-8"
-        >
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="输入新的待办事项..."
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-              disabled={isSubmitting}
-            />
-            <select
-              value={newCategoryId || ''}
-              onChange={(e) => setNewCategoryId(e.target.value || null)}
-              className="px-3 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              disabled={!newTitle.trim() || isSubmitting}
-              className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isSubmitting ? '添加中...' : '添加'}
-            </button>
-          </div>
-        </form>
+        <div className="flex gap-6">
+          {/* ========== 左侧分类筛选栏 ========== */}
+          <div className="w-48 shrink-0">
+            <div className="bg-white rounded-xl shadow-lg p-4 sticky top-8">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">分类筛选</h3>
+              <div className="space-y-1">
+                {/* 全部 */}
+                <button
+                  onClick={() => setFilterCategoryId(null)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    filterCategoryId === null
+                      ? 'bg-gray-800 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  📋 全部
+                </button>
 
-        {/* 分类筛选按钮 */}
-        <div className="flex gap-2 mb-4 flex-wrap">
-          <button
-            onClick={() => setFilterCategoryId(null)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filterCategoryId === null
-                ? 'bg-gray-800 text-white'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-          >
-            全部
-          </button>
-          {categories.map((cat) => {
-            const color = hexToTailwind(cat.color)
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setFilterCategoryId(filterCategoryId === cat.id ? null : cat.id)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  filterCategoryId === cat.id
-                    ? `${color.bg} ${color.text} ring-2 ring-offset-1`
-                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                }`}
-              >
-                {cat.icon} {cat.name}
-              </button>
-            )
-          })}
-        </div>
+                {/* 每个分类 */}
+                {categories.map((cat) => {
+                  const active = filterCategoryId === cat.id
+                  const color = hexToTailwind(cat.color)
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setFilterCategoryId(active ? null : cat.id)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        active
+                          ? `${color.bg} ${color.text}`
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {cat.icon} {cat.name}
+                    </button>
+                  )
+                })}
+              </div>
 
-        {/* 任务列表 */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-gray-800">我的任务</h2>
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-              {filterCategoryId
-                ? `${getCategoryName(filterCategoryId)}: ${filteredTodos.length}`
-                : `${todos.length} 个任务`}
-            </span>
-          </div>
-          
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-gray-500">加载中...</p>
-            </div>
-          ) : filteredTodos.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">🔍</div>
-              <p className="text-gray-500 text-lg">
-                {filterCategoryId ? `没有「${getCategoryName(filterCategoryId)}」类的任务` : '还没有待办事项'}
-              </p>
-              <p className="text-gray-400 text-sm mt-2">
-                {filterCategoryId ? '换个分类看看吧' : '添加你的第一个任务吧！'}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredTodos.map((todo) => {
-                const color = getColor(todo.category_id)
-                return (
-                <div key={todo.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    <input
-                      type="checkbox"
-                      checked={todo.completed}
-                      onChange={(e) => handleToggle(todo.id, e.target.checked)}
-                      className="h-5 w-5 text-blue-600 rounded focus:ring-blue-500 shrink-0"
-                    />
-                    <div className="flex items-center space-x-2 min-w-0">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} shrink-0`}>
-                        {getCategoryName(todo.category_id)}
-                      </span>
-                      <span className={`text-lg truncate ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                        {todo.title}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(todo.id)}
-                    className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors shrink-0 ml-2"
-                  >
-                    删除
-                  </button>
+              {/* 任务统计 */}
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="text-xs text-gray-400 space-y-1">
+                  {filterCategoryId ? (
+                    <p>{filteredTodos.length} 条结果</p>
+                  ) : (
+                    categories.map(cat => (
+                      <p key={cat.id} className="flex justify-between">
+                        <span>{cat.icon} {cat.name}</span>
+                        <span>{todos.filter(t => t.category_id === cat.id).length}</span>
+                      </p>
+                    ))
+                  )}
                 </div>
-                )})}
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* ========== 右侧主内容 ========== */}
+          <div className="flex-1 min-w-0">
+            {/* 添加任务表单 */}
+            <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleAdd() }} className="flex gap-3">
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="输入新的待办事项..."
+                  className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-gray-900"
+                  disabled={isSubmitting}
+                />
+                <select
+                  value={selectedCategoryId || ''}
+                  onChange={(e) => setSelectedCategoryId(e.target.value || null)}
+                  className="px-3 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-900"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  disabled={!newTitle.trim() || isSubmitting}
+                  className="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {isSubmitting ? '添加中...' : '添加'}
+                </button>
+              </form>
+            </div>
+
+            {/* 任务列表 */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {filterCategoryId ? getCategoryInfo(filterCategoryId).icon + ' ' + getCategoryInfo(filterCategoryId).name : '所有任务'}
+                </h2>
+                <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                  {filterCategoryId ? `${filteredTodos.length} 条` : `${todos.length} 个任务`}
+                </span>
+              </div>
+
+              {isLoading ? (
+                <div className="text-center py-16">
+                  <div className="animate-spin h-8 w-8 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-3"></div>
+                  <p className="text-gray-400 text-sm">加载中...</p>
+                </div>
+              ) : filteredTodos.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="text-5xl mb-3">📭</div>
+                  <p className="text-gray-500">
+                    {filterCategoryId ? `「${getCategoryInfo(filterCategoryId).name}」类暂时没有任务` : '还没有待办事项'}
+                  </p>
+                  <p className="text-gray-400 text-sm mt-1">
+                    {filterCategoryId ? '换个分类看看吧' : '在上面输入框添加你的第一个任务吧！'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredTodos.map((todo) => {
+                    const catInfo = getCategoryInfo(todo.category_id)
+                    const color = getColor(todo.category_id)
+                    return (
+                      <div
+                        key={todo.id}
+                        className="flex items-center justify-between p-3.5 rounded-lg border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={todo.completed}
+                            onChange={(e) => handleToggle(todo.id, e.target.checked)}
+                            className="h-4 w-4 text-blue-600 rounded focus:ring-blue-400 shrink-0"
+                          />
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} shrink-0 flex items-center gap-1`}>
+                            {catInfo.icon} {catInfo.name}
+                          </span>
+                          <span className={`text-base truncate ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                            {todo.title}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleDelete(todo.id)}
+                          className="px-2.5 py-1 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shrink-0 ml-2 opacity-0 hover:opacity-100"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* 页脚说明 */}
-        <div className="mt-8 text-center text-gray-500 text-sm">
-          <p>✅ 点击复选框标记完成 • 🗑️ 点击删除按钮移除任务</p>
-          <p className="mt-1">数据实时保存到 Supabase 数据库</p>
+        <div className="mt-6 text-center text-gray-400 text-xs">
+          ✅ 勾选完成任务 · 🗑️ 悬停点击删除 · 📊 左侧分类筛选
         </div>
       </div>
     </div>
