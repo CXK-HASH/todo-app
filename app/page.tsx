@@ -65,6 +65,7 @@ export default function Home() {
     setIsSubmitting(true)
 
     // AI 自动分类（输入变化时重新分类）
+    let useCategoryId = selectedCategoryId
     if (newTitle.trim() !== lastAiTitle) {
       try {
         const res = await fetch('/api/classify', {
@@ -78,15 +79,18 @@ export default function Home() {
           setLastAiTitle(newTitle.trim())
           // 自动选中 AI 推荐的分类
           const aiCat = categories.find(c => c.name === data.category)
-          if (aiCat) setSelectedCategoryId(aiCat.id)
+          if (aiCat) {
+            useCategoryId = aiCat.id
+            setSelectedCategoryId(aiCat.id)
+          }
         }
       } catch {
         // AI 分类失败，保持用户选择
       }
     }
 
-    const cat = categories.find(c => c.id === categoryId)
-    const result = await addTodo(newTitle.trim(), categoryId, cat?.name || '默认')
+    const cat = categories.find(c => c.id === useCategoryId)
+    const result = await addTodo(newTitle.trim(), useCategoryId, cat?.name || '默认')
     setIsSubmitting(false)
     if (result) {
       setNewTitle('')
