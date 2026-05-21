@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { Todo } from '@/lib/supabase/types'
+import { Todo, Category } from '@/lib/supabase/types'
 
 const supabase = createClient()
 
@@ -19,10 +19,24 @@ export async function getTodos(): Promise<Todo[]> {
   return data || []
 }
 
-export async function addTodo(title: string, category: string = '默认'): Promise<Todo | null> {
+export async function getCategories(): Promise<Category[]> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching categories:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function addTodo(title: string, categoryId: string | null = null, category: string = '默认'): Promise<Todo | null> {
   const { data, error } = await supabase
     .from('todos')
-    .insert([{ title, completed: false, category }])
+    .insert([{ title, completed: false, category, category_id: categoryId }])
     .select()
     .single()
 

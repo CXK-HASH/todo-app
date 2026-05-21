@@ -1,75 +1,105 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getTodos, updateTodo, deleteTodo, addTodo } from '@/lib/todo'
-import { Todo } from '@/lib/supabase/types'
+import { getTodos, updateTodo, deleteTodo, addTodo, getCategories } from '@/lib/todo'
+import { Todo, Category } from '@/lib/supabase/types'
 
-const CATEGORIES = ['工作', '学习', '生活'] as const
-
-const CATEGORY_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  '工作': { bg: 'bg-blue-100', text: 'text-blue-700', dot: 'bg-blue-500' },
-  '学习': { bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500' },
-  '生活': { bg: 'bg-orange-100', text: 'text-orange-700', dot: 'bg-orange-500' },
+// 本地默认的颜色映射（fallback）
+const LOCAL_CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  '工作': { bg: 'bg-blue-100', text: 'text-blue-700' },
+  '学习': { bg: 'bg-green-100', text: 'text-green-700' },
+  '生活': { bg: 'bg-orange-100', text: 'text-orange-700' },
 }
 
-const DEFAULT_CATEGORY = '默认'
+const DEFAULT_COLOR = { bg: 'bg-gray-100', text: 'text-gray-600' }
+
+// 根据 hex 颜色映射到 Tailwind 颜色类名
+function hexToTailwind(hex: string | undefined): { bg: string; text: string } {
+  if (!hex) return DEFAULT_COLOR
+  const map: Record<string, { bg: string; text: string }> = {
+    '#3B82F6': { bg: 'bg-blue-100', text: 'text-blue-700' },
+    '#22C55E': { bg: 'bg-green-100', text: 'text-green-700' },
+    '#F97316': { bg: 'bg-orange-100', text: 'text-orange-700' },
+    '#6B7280': { bg: 'bg-gray-100', text: 'text-gray-600' },
+    '#EF4444': { bg: 'bg-red-100', text: 'text-red-700' },
+    '#A855F7': { bg: 'bg-purple-100', text: 'text-purple-700' },
+    '#EC4899': { bg: 'bg-pink-100', text: 'text-pink-700' },
+    '#14B8A6': { bg: 'bg-teal-100', text: 'text-teal-700' },
+    '#EAB308': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  }
+  return map[hex.toUpperCase()] || DEFAULT_COLOR
+}
 
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [newTitle, setNewTitle] = useState('')
-  const [newCategory, setNewCategory] = useState('工作')
-  const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  const [newCategoryId, setNewCategoryId] = useState<string | null>(null)
+  const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const loadTodos = async () => {
+  const loadData = async () => {
     try {
-      const data = await getTodos()
-      setTodos(data)
+      const [todosData, categoriesData] = await Promise.all([
+        getTodos(),
+        getCategories(),
+      ])
+      setTodos(todosData)
+      setCategories(categoriesData)
+      // 默认选中第一个分类
+      if (categoriesData.length > 0 && !newCategoryId) {
+        setNewCategoryId(categoriesData[0].id)
+      }
     } catch (err) {
-      console.error('Failed to load todos:', err)
+      console.error('Failed to load data:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadTodos()
+    loadData()
   }, [])
 
   const handleAdd = async () => {
     if (!newTitle.trim() || isSubmitting) return
     setIsSubmitting(true)
-    const result = await addTodo(newTitle.trim(), newCategory)
+    const selectedCategory = categories.find(c => c.id === newCategoryId)
+    const result = await addTodo(newTitle.trim(), newCategoryId, selectedCategory?.name || '默认')
     setIsSubmitting(false)
     if (result) {
       setNewTitle('')
-      setNewCategory('工作')
-      loadTodos()
+      loadData()
     }
   }
 
   const handleToggle = async (id: string, completed: boolean) => {
     await updateTodo(id, { completed })
-    loadTodos()
+    loadData()
   }
 
   const handleDelete = async (id: string) => {
     await deleteTodo(id)
-    loadTodos()
+    loadData()
   }
 
-  const getColor = (category: string) => {
-    return CATEGORY_COLORS[category] || { bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' }
+  const getColor = (categoryId: string | null) => {
+    if (!categoryId) return DEFAULT_COLOR
+    const cat = categories.find(c => c.id === categoryId)
+    if (!cat) return DEFAULT_COLOR
+    return hexToTailwind(cat.color)
   }
 
-  const filteredTodos = filterCategory
-    ? todos.filter((todo) => todo.category === filterCategory)
+  const getCategoryName = (categoryId: string | null) => {
+    if (!categoryId) return '默认'
+    const cat = categories.find(c => c.id === categoryId)
+    return cat?.name || '默认'
+  }
+
+  const filteredTodos = filterCategoryId
+    ? todos.filter((todo) => todo.category_id === filterCategoryId)
     : todos
-
-  const toggleFilter = (category: string) => {
-    setFilterCategory(filterCategory === category ? null : category)
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12 px-4">
@@ -95,12 +125,12 @@ export default function Home() {
               disabled={isSubmitting}
             />
             <select
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
+              value={newCategoryId || ''}
+              onChange={(e) => setNewCategoryId(e.target.value || null)}
               className="px-3 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
             >
-              {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
             <button
@@ -116,28 +146,28 @@ export default function Home() {
         {/* 分类筛选按钮 */}
         <div className="flex gap-2 mb-4 flex-wrap">
           <button
-            onClick={() => setFilterCategory(null)}
+            onClick={() => setFilterCategoryId(null)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filterCategory === null
+              filterCategoryId === null
                 ? 'bg-gray-800 text-white'
                 : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
             }`}
           >
             全部
           </button>
-          {CATEGORIES.map((cat) => {
-            const color = getColor(cat)
+          {categories.map((cat) => {
+            const color = hexToTailwind(cat.color)
             return (
               <button
-                key={cat}
-                onClick={() => toggleFilter(cat)}
+                key={cat.id}
+                onClick={() => setFilterCategoryId(filterCategoryId === cat.id ? null : cat.id)}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  filterCategory === cat
-                    ? `${color.bg} ${color.text} ring-2 ring-offset-1 ring-${cat === '工作' ? 'blue' : cat === '学习' ? 'green' : 'orange'}-500`
+                  filterCategoryId === cat.id
+                    ? `${color.bg} ${color.text} ring-2 ring-offset-1`
                     : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                 }`}
               >
-                {cat}
+                {cat.icon} {cat.name}
               </button>
             )
           })}
@@ -148,7 +178,9 @@ export default function Home() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-semibold text-gray-800">我的任务</h2>
             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-              {filterCategory ? `${filterCategory}: ${filteredTodos.length}` : `${todos.length} 个任务`}
+              {filterCategoryId
+                ? `${getCategoryName(filterCategoryId)}: ${filteredTodos.length}`
+                : `${todos.length} 个任务`}
             </span>
           </div>
           
@@ -160,13 +192,17 @@ export default function Home() {
           ) : filteredTodos.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 text-6xl mb-4">🔍</div>
-              <p className="text-gray-500 text-lg">{filterCategory ? `没有「${filterCategory}」类的任务` : '还没有待办事项'}</p>
-              <p className="text-gray-400 text-sm mt-2">{filterCategory ? '换个分类看看吧' : '添加你的第一个任务吧！'}</p>
+              <p className="text-gray-500 text-lg">
+                {filterCategoryId ? `没有「${getCategoryName(filterCategoryId)}」类的任务` : '还没有待办事项'}
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                {filterCategoryId ? '换个分类看看吧' : '添加你的第一个任务吧！'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {filteredTodos.map((todo) => {
-                const color = getColor(todo.category)
+                const color = getColor(todo.category_id)
                 return (
                 <div key={todo.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                   <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -178,7 +214,7 @@ export default function Home() {
                     />
                     <div className="flex items-center space-x-2 min-w-0">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${color.bg} ${color.text} shrink-0`}>
-                        {todo.category}
+                        {getCategoryName(todo.category_id)}
                       </span>
                       <span className={`text-lg truncate ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
                         {todo.title}
